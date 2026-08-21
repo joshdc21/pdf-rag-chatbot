@@ -1,5 +1,6 @@
 from dotenv import load_dotenv 
 import os 
+import glob
 from google import genai 
 # pyrefly: ignore [missing-import]
 import chromadb
@@ -12,35 +13,58 @@ load_dotenv()
 
 client = genai.Client(api_key=os.environ.get("GEMINI_API_KEY"))
 
-# Load the pdf
-reader = PdfReader("AI_Healthcare_Sector_Market_Report.pdf")
+# Create a local Vector Database using ChromaDB
+chroma_client = chromadb.PersistentClient(path='./chroma_db')
 
-# extract text from pdf
-text = "" 
-for page in reader.pages: 
-    page_text = page.extract_text() 
-    if page_text: 
-        text += page_text + "\n"
+# Collection is where you store related document(like a table in a database)
+collection = chroma_client.get_or_create_collection(name="my_knowledge_base")
 
 # Split the text into chunks
 splitter = RecursiveCharacterTextSplitter( 
     chunk_size=500, chunk_overlap=50 
 ) 
-chunks = splitter.split_text(text) 
 
-print(f"Number of chunks: {len(chunks)}")
+pdf_files = glob.glob("documents/*.pdf")
 
-# Create a local Vector Database using ChromaDB
-chroma_client = chromadb.Client()
+for pdf_file in pdf_files:
+    print(pdf_file)
+    filename = os.path.basename(pdf_file)
+    # Check whether this PDF has already been ingested
+    existing = collection.get(
+        where={"source": filename}
+    )
 
-# Collection is where you store related document(like a table in a database)
-collection = chroma_client.get_or_create_collection(name="my_knowledge_base")
+    if existing["ids"]:
+        print(f"Skipping {filename} - already ingested")
+        continue
 
-# add data to the database
-collection.add(
-    documents=chunks,
-    ids=[f"chunk_{i}" for i in range(len(chunks))]
-)
+    print(f"Processing {filename}")
+    # Load the pdf
+    reader = PdfReader(pdf_file)
+
+    # extract text from pdf
+    text = "" 
+    for page in reader.pages: 
+        page_text = page.extract_text() 
+        if page_text: 
+            text += page_text + "\n"
+
+    # Split the text into chunks
+    chunks = splitter.split_text(text) 
+
+    print(f"Number of chunks: {len(chunks)}")
+
+    collection.add(
+        documents = chunks,
+        ids = [
+            f"{filename}-chunk-{i}" for i in range(len(chunks))
+        ],
+        metadatas = [
+            {'source': filename}
+            for _ in range(len(chunks))
+        ]
+    )
+    print(f"Added {filename} to ChromaDB")
 
 conversation_history = []
 
@@ -83,7 +107,7 @@ Standalone Query:"""
 if __name__ == "__main__":
     print("\n--- Ask anything about your pdf(type 'exit' to quit) ---\n")
     while True: 
-        user_query = input()
+        user_query = input("Ask anything: ")
         if user_query.lower() == "exit":
             break
 
