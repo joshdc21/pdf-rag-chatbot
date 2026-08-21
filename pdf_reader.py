@@ -120,7 +120,16 @@ if __name__ == "__main__":
             query_texts=[standalone_query],
             n_results=3
         )
-        retrieved_context = "\n\n".join(results["documents"][0])
+        retrieved_context = ""
+
+        for document, metadata in zip(
+            results["documents"][0],
+            results["metadatas"][0]
+        ):
+            retrieved_context += (
+                f"Source: {metadata['source']}\n"
+                f"Content: {document}\n\n"
+            )
 
         history_text = "\n".join(
             f"{message['role']}: {message['content']}"
@@ -129,12 +138,13 @@ if __name__ == "__main__":
 
         prompt = f"""You are a helpful assistant. Answer the user's current question using ONLY the 
         provided PDF context.
+        For every factual claim in your answer, cite the PDF filename that supports it using this format:
+        [Source: filename.pdf]
+        Previous conversation history:
+        {history_text if history_text else "None"}
 
-Previous conversation history:
-{history_text if history_text else "None"}
-
-Relevant PDF context:
-{retrieved_context}
+        Relevant PDF context:
+        {retrieved_context}
 
 Current question:
 {user_query}
@@ -150,7 +160,6 @@ If the answer cannot be found in the PDF context, say:
 
         print(f"Assistant: {response.text}\n")
         
-        # 4. STEP 4: Update conversation history
         conversation_history.append({
             "role": "user",
             "content": user_query
