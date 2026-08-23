@@ -8,8 +8,12 @@ import chromadb
 from pypdf import PdfReader
 # pyrefly: ignore [missing-import]
 from langchain_text_splitters import RecursiveCharacterTextSplitter
+import hashlib
 
 load_dotenv()
+
+def hash_content(text):
+    return hashlib.sha256(text.encode("utf-8")).hexdigest()
 
 client = genai.Client(api_key=os.environ.get("GEMINI_API_KEY"))
 
@@ -29,14 +33,6 @@ pdf_files = glob.glob("documents/*.pdf")
 for pdf_file in pdf_files:
     print(pdf_file)
     filename = os.path.basename(pdf_file)
-    # Check whether this PDF has already been processed
-    existing = collection.get(
-        where={"source": filename}
-    )
-
-    if existing["ids"]:
-        print(f"Skipping {filename} - already ingested")
-        continue
 
     print(f"Processing {filename}")
     # Load the pdf
@@ -49,6 +45,23 @@ for pdf_file in pdf_files:
         if page_text: 
             text += page_text + "\n"
 
+    content_hash = hash_content(text)
+
+    # Check whether this PDF has already been processed
+    existing = collection.get(
+        where={"source": filename}
+    )
+
+    if existing["ids"]:
+        existing_hash = existing["metadatas"][0].get("content_hash")
+        if existing_hash == content_hash:
+            print(f"Skipping {filename}- already processed")
+            continue
+        print(f"{filename} has changed - re-processing")
+        collection.delete(
+            where={"source": filename}
+        )
+
     # Split the text into chunks
     chunks = splitter.split_text(text) 
 
@@ -59,9 +72,12 @@ for pdf_file in pdf_files:
         ids = [
             f"{filename}-chunk-{i}" for i in range(len(chunks))
         ],
-        metadatas = [
-            {'source': filename}
-            for _ in range(len(chunks))
+        metadatas=[
+            {
+                "source": filename,
+                "content_hash": content_hash
+            }
+            for _ in chunks
         ]
     )
     print(f"Added {filename} to ChromaDB")
