@@ -1,3 +1,4 @@
+import contextlib
 from dotenv import load_dotenv 
 import os 
 import glob
@@ -39,13 +40,21 @@ for pdf_file in pdf_files:
     reader = PdfReader(pdf_file)
 
     # extract text from pdf
-    text = "" 
-    for page in reader.pages: 
+    pages = []
+    for page_number, page in enumerate(reader.pages, start=1):
         page_text = page.extract_text() 
         if page_text: 
-            text += page_text + "\n"
+            pages.append({
+                "page":page_number,
+                "text":page_text
+            })
 
-    content_hash = hash_content(text)
+    full_text = "\n".join(
+        page["text"]
+        for page in pages
+    )
+
+    content_hash = hash_content(full_text)
 
     # Check whether this PDF has already been processed
     existing = collection.get(
@@ -63,8 +72,18 @@ for pdf_file in pdf_files:
         )
 
     # Split the text into chunks
-    chunks = splitter.split_text(text) 
+    chunks = []
+    metadatas = []
 
+    for page in pages:
+        page_chunks = splitter.split_text(page["text"])
+        for chunk in page_chunks:
+            chunks.append(chunk)
+            metadatas.append({
+                "source": filename,
+                "page": page["page"],
+                "content_hash": content_hash
+            })
     print(f"Number of chunks: {len(chunks)}")
 
     collection.add(
@@ -72,13 +91,7 @@ for pdf_file in pdf_files:
         ids = [
             f"{filename}-chunk-{i}" for i in range(len(chunks))
         ],
-        metadatas=[
-            {
-                "source": filename,
-                "content_hash": content_hash
-            }
-            for _ in chunks
-        ]
+        metadatas=metadatas
     )
     print(f"Added {filename} to ChromaDB")
 
@@ -133,8 +146,8 @@ if __name__ == "__main__":
 
         standalone_query = rewrite_query_with_history(user_query, conversation_history)
         
-        if standalone_query != user_query:
-            print(f"{standalone_query}")
+        #if standalone_query != user_query:
+            #print(f"{standalone_query}")
 
         results = collection.query(
             query_texts=[standalone_query],
@@ -148,6 +161,7 @@ if __name__ == "__main__":
         ):
             retrieved_context += (
                 f"Source: {metadata['source']}\n"
+                f"Page: {metadata['page']}\n"
                 f"Content: {document}\n\n"
             )
 
@@ -158,8 +172,8 @@ if __name__ == "__main__":
 
         prompt = f"""You are a helpful assistant. Answer the user's current question using ONLY the 
         provided PDF context.
-        For every factual claim in your answer, cite the PDF filename that supports it using this format:
-        [Source: filename.pdf]
+        For every factual claim in your answer, cite the PDF filename and page number that supports it using this format:
+        [Source: filename.pdf - page X]
         Previous conversation history:
         {history_text if history_text else "None"}
 
