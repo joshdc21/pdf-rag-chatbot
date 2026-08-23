@@ -29,7 +29,7 @@ pdf_files = glob.glob("documents/*.pdf")
 for pdf_file in pdf_files:
     print(pdf_file)
     filename = os.path.basename(pdf_file)
-    # Check whether this PDF has already been ingested
+    # Check whether this PDF has already been processed
     existing = collection.get(
         where={"source": filename}
     )
@@ -88,14 +88,14 @@ def rewrite_query_with_history(user_query, conversation_history):
     rephrase the follow-up question to be a standalone search query that can be understood on its 
     own without needing the conversation history.
 
-Do NOT answer the question. Only return the rephrased standalone query. If the follow-up question is already standalone, return it as is.
+    Do NOT answer the question. Only return the rephrased standalone query. If the follow-up question is already standalone, return it as is.
 
-Conversation History:
-{history_text}
+    Conversation History:
+    {history_text}
 
-Follow-up Question: {user_query}
+    Follow-up Question: {user_query}
 
-Standalone Query:"""
+    Standalone Query:"""
 
     #rewrite the prompt, and then send it back
     response = client.models.generate_content(
@@ -146,12 +146,12 @@ if __name__ == "__main__":
         Relevant PDF context:
         {retrieved_context}
 
-Current question:
-{user_query}
+        Current question:
+        {user_query}
 
-If the answer cannot be found in the PDF context, say:
-"I don't know based on the provided document." Do not invent facts outside the PDF context.
-"""
+        If the answer cannot be found in the PDF context, say:
+        "I don't know based on the provided document." Do not invent facts outside the PDF context.
+        """
 
         response = client.models.generate_content(
             model='gemini-2.5-flash',
