@@ -98,11 +98,15 @@ def rewrite_query_with_history(user_query, conversation_history):
     Standalone Query:"""
 
     #rewrite the prompt, and then send it back
-    response = client.models.generate_content(
-        model='gemini-2.5-flash',
-        contents=prompt
-    )
-    return response.text.strip()
+    try:
+        response = client.models.generate_content(
+            model='gemini-2.5-flash',
+            contents=prompt
+        )
+        return response.text.strip()
+    except Exception as e:
+        print(f"Query rewrite failed: {e}")
+        return user_query
 
 if __name__ == "__main__":
     print("\n--- Ask anything about your pdf(type 'exit' to quit) ---\n")
@@ -152,13 +156,15 @@ if __name__ == "__main__":
         If the answer cannot be found in the PDF context, say:
         "I don't know based on the provided document." Do not invent facts outside the PDF context.
         """
-
-        response = client.models.generate_content(
-            model='gemini-2.5-flash',
-            contents=prompt
-        )
-
-        print(f"Assistant: {response.text}\n")
+        try:
+            response = client.models.generate_content(
+                model='gemini-2.5-flash',
+                contents=prompt
+            )
+            print(f"Assistant: {response.text}\n")
+        except Exception as e:
+            print(f"Error generating response: {e}")
+            continue
         
         conversation_history.append({
             "role": "user",
