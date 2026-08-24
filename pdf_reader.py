@@ -16,6 +16,12 @@ load_dotenv()
 def hash_content(text):
     return hashlib.sha256(text.encode("utf-8")).hexdigest()
 
+def retrieve_documents(query, n_results=5):
+    return collection.query(
+        query_texts=[query],
+        n_results=n_results
+    )
+
 client = genai.Client(api_key=os.environ.get("GEMINI_API_KEY"))
 
 # Create a local Vector Database using ChromaDB
@@ -149,8 +155,8 @@ if __name__ == "__main__":
         #if standalone_query != user_query:
             #print(f"{standalone_query}")
 
-        results = collection.query(
-            query_texts=[standalone_query],
+        results = retrieve_documents(
+            standalone_query,
             n_results=5
         )
 
