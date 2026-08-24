@@ -151,8 +151,9 @@ if __name__ == "__main__":
 
         results = collection.query(
             query_texts=[standalone_query],
-            n_results=3
+            n_results=5
         )
+
         retrieved_context = ""
 
         for document, metadata in zip(
