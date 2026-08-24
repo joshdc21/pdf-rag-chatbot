@@ -16,6 +16,12 @@ load_dotenv()
 def hash_content(text):
     return hashlib.sha256(text.encode("utf-8")).hexdigest()
 
+def retrieve_documents(query, n_results=5):
+    return collection.query(
+        query_texts=[query],
+        n_results=n_results
+    )
+
 client = genai.Client(api_key=os.environ.get("GEMINI_API_KEY"))
 
 # Create a local Vector Database using ChromaDB
@@ -149,8 +155,8 @@ if __name__ == "__main__":
         #if standalone_query != user_query:
             #print(f"{standalone_query}")
 
-        results = collection.query(
-            query_texts=[standalone_query],
+        results = retrieve_documents(
+            standalone_query,
             n_results=5
         )
 
@@ -171,10 +177,18 @@ if __name__ == "__main__":
             for message in conversation_history
         )
 
-        prompt = f"""You are a helpful assistant. Answer the user's current question using ONLY the 
-        provided PDF context.
-        For every factual claim in your answer, cite the PDF filename and page number that supports it using this format:
-        [Source: filename.pdf - page X]
+        prompt = f"""You are a helpful assistant answering questions about the provided PDF documents.
+
+        Answer the user's current question using ONLY the provided PDF context.
+
+        For every factual claim, cite the specific source and page that supports it using this format:
+        [Source: filename.pdf, Page: X]
+
+        Only cite sources and page numbers that appear in the provided PDF context.
+        Do not invent or guess page numbers.
+
+        If multiple sources or pages support a claim, you may cite multiple sources.
+
         Previous conversation history:
         {history_text if history_text else "None"}
 
@@ -184,8 +198,10 @@ if __name__ == "__main__":
         Current question:
         {user_query}
 
-        If the answer cannot be found in the PDF context, say:
-        "I don't know based on the provided document." Do not invent facts outside the PDF context.
+        If the answer cannot be found in the provided PDF context, say:
+        "I don't know based on the provided document."
+
+        Do not use outside knowledge or invent information.
         """
         try:
             response = client.models.generate_content(
