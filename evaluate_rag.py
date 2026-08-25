@@ -101,7 +101,18 @@ def evaluate_hit_at_3():
             hits += 1
             print(f"PASS: {test['question']}")
         else:
-            print(f"FAIL: {test['question']}")
+            print(f"\nFAIL: {test['question']}")
+            print(
+                f"Expected: {test['expected_source']}, "
+                f"Page {test['expected_page']}"
+            )
+
+            print("Retrieved:")
+            for i, metadata in enumerate(retrieved_metadata, start=1):
+                print(
+                    f"  {i}. {metadata['source']}, "
+                    f"Page {metadata['page']}"
+                )
 
     score = hits / len(test_questions)
 

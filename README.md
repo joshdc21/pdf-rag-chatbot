@@ -70,3 +70,29 @@ Type `exit` at any point to quit.
 - **Grounding** — The assistant is instructed to answer only from retrieved PDF context and to say *"I don't know based on the provided document"* when the answer isn't found.
 - **Cost/latency** — Each turn makes two Gemini calls (one to rewrite the query, one to generate the answer).
 
+## Retrieval Evaluation
+
+To evaluate the retrieval quality of the RAG pipeline, I created a small
+evaluation set of 15 questions across the three PDF documents.
+
+For each question, I specified the expected source document and page where
+the relevant information could be found. The evaluation script then queries
+ChromaDB and checks whether the expected page appears within the top `k`
+retrieved chunks.
+
+I used Hit@k as the retrieval metric:
+
+- **Hit@1:** 66.67%
+- **Hit@3:** 73.33%
+- **Hit@5:** 80.00%
+
+For example, a Hit@3 score of 73.33% means that the expected source page
+was retrieved within the top three results for 73.33% of the test questions.
+
+The results show that increasing the number of retrieved chunks improves
+retrieval recall. However, the evaluation also identified several questions
+where the relevant page was not retrieved within the top five results.
+
+This evaluation focuses specifically on **retrieval quality**, rather than
+whether Gemini generates the correct final answer. This helps separate
+retrieval problems from generation problems when debugging the RAG pipeline.
