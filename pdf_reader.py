@@ -1,4 +1,3 @@
-import contextlib
 from dotenv import load_dotenv 
 import os 
 import glob
@@ -35,71 +34,72 @@ splitter = RecursiveCharacterTextSplitter(
     chunk_size=500, chunk_overlap=50 
 ) 
 
-pdf_files = glob.glob("documents/*.pdf")
+def ingest_documents():
+    pdf_files = glob.glob("documents/*.pdf")
 
-for pdf_file in pdf_files:
-    print(pdf_file)
-    filename = os.path.basename(pdf_file)
+    for pdf_file in pdf_files:
+        print(pdf_file)
+        filename = os.path.basename(pdf_file)
 
-    print(f"Processing {filename}")
-    # Load the pdf
-    reader = PdfReader(pdf_file)
+        print(f"Processing {filename}")
+        # Load the pdf
+        reader = PdfReader(pdf_file)
 
-    # extract text from pdf
-    pages = []
-    for page_number, page in enumerate(reader.pages, start=1):
-        page_text = page.extract_text() 
-        if page_text: 
-            pages.append({
-                "page":page_number,
-                "text":page_text
-            })
+        # extract text from pdf
+        pages = []
+        for page_number, page in enumerate(reader.pages, start=1):
+            page_text = page.extract_text() 
+            if page_text: 
+                pages.append({
+                    "page":page_number,
+                    "text":page_text
+                })
 
-    full_text = "\n".join(
-        page["text"]
-        for page in pages
-    )
+        full_text = "\n".join(
+            page["text"]
+            for page in pages
+        )
 
-    content_hash = hash_content(full_text)
+        content_hash = hash_content(full_text)
 
-    # Check whether this PDF has already been processed
-    existing = collection.get(
-        where={"source": filename}
-    )
-
-    if existing["ids"]:
-        existing_hash = existing["metadatas"][0].get("content_hash")
-        if existing_hash == content_hash:
-            print(f"Skipping {filename}- already processed")
-            continue
-        print(f"{filename} has changed - re-processing")
-        collection.delete(
+        # Check whether this PDF has already been processed
+        existing = collection.get(
             where={"source": filename}
         )
 
-    # Split the text into chunks
-    chunks = []
-    metadatas = []
+        if existing["ids"]:
+            existing_hash = existing["metadatas"][0].get("content_hash")
+            if existing_hash == content_hash:
+                print(f"Skipping {filename}- already processed")
+                continue
+            print(f"{filename} has changed - re-processing")
+            collection.delete(
+                where={"source": filename}
+            )
 
-    for page in pages:
-        page_chunks = splitter.split_text(page["text"])
-        for chunk in page_chunks:
-            chunks.append(chunk)
-            metadatas.append({
-                "source": filename,
-                "page": page["page"],
-                "content_hash": content_hash
-            })
-    print(f"Number of chunks: {len(chunks)}")
+        # Split the text into chunks
+        chunks = []
+        metadatas = []
 
-    collection.add(
-        documents = chunks,
-        ids = [
-            f"{filename}-chunk-{i}" for i in range(len(chunks))
-        ],
-        metadatas=metadatas
-    )
-    print(f"Added {filename} to ChromaDB")
+        for page in pages:
+            page_chunks = splitter.split_text(page["text"])
+            for chunk in page_chunks:
+                chunks.append(chunk)
+                metadatas.append({
+                    "source": filename,
+                    "page": page["page"],
+                    "content_hash": content_hash
+                })
+        print(f"Number of chunks: {len(chunks)}")
+
+        collection.add(
+            documents = chunks,
+            ids = [
+                f"{filename}-chunk-{i}" for i in range(len(chunks))
+            ],
+            metadatas=metadatas
+        )
+        print(f"Added {filename} to ChromaDB")
 
 conversation_history = []
 
@@ -144,6 +144,7 @@ def rewrite_query_with_history(user_query, conversation_history):
         return user_query
 
 if __name__ == "__main__":
+    ingest_documents()
     print("\n--- Ask anything about your pdf(type 'exit' to quit) ---\n")
     while True: 
         user_query = input("Ask anything: ")
