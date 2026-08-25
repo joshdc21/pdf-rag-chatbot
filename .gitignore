@@ -2,8 +2,10 @@
 .env
 
 # Python virtual environments
+.venv/
 venv/
 env/
 ENV/
 __pycache__/
 *.pyc
+chroma_db/
