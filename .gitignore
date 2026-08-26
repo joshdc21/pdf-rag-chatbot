@@ -9,3 +9,4 @@ ENV/
 __pycache__/
 *.pyc
 chroma_db/
+.streamlit/
