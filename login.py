@@ -25,6 +25,7 @@ def login():
             })
 
             st.session_state["user"] = response.user
+            st.session_state["session"] = response.session
 
             st.success("Login successful!")
             st.rerun()

@@ -15,10 +15,12 @@ load_dotenv()
 def hash_content(text):
     return hashlib.sha256(text.encode("utf-8")).hexdigest()
 
-def retrieve_documents(query, n_results=5):
+def retrieve_documents(query, n_results=5, user_id=None):
+    where_clause = {"user_id": user_id} if user_id else None
     return collection.query(
         query_texts=[query],
-        n_results=n_results
+        n_results=n_results,
+        where=where_clause
     )
 
 client = genai.Client(api_key=os.environ.get("GEMINI_API_KEY"))
@@ -34,72 +36,87 @@ splitter = RecursiveCharacterTextSplitter(
     chunk_size=500, chunk_overlap=50 
 ) 
 
+def ingest_single_pdf(file_source, filename, user_id=None, status_cb=None):
+    """
+    Ingests a single PDF file (either file path or file-like object) into ChromaDB.
+    """
+    def log(msg):
+        if status_cb:
+            status_cb(msg)
+
+    log(f"Processing {filename}...")
+    reader = PdfReader(file_source)
+
+    pages = []
+    for page_number, page in enumerate(reader.pages, start=1):
+        page_text = page.extract_text()
+        if page_text:
+            pages.append({
+                "page": page_number,
+                "text": page_text
+            })
+
+    full_text = "\n".join(page["text"] for page in pages)
+    content_hash = hash_content(full_text)
+
+    # Check whether this PDF has already been processed
+    existing = collection.get(
+    where={
+        "$and": [
+            {"source": filename},
+            {"user_id": user_id}
+        ]
+    }
+)
+
+    if existing and existing.get("ids"):
+        existing_hash = existing["metadatas"][0].get("content_hash")
+        if existing_hash == content_hash:
+            log(f"Skipping {filename} - already processed")
+            return
+        log(f"{filename} has changed - re-processing")
+        collection.delete(
+    where={
+        "$and": [
+            {"source": filename},
+            {"user_id": user_id}
+        ]
+    }
+)
+
+    # Split the text into chunks
+    chunks = []
+    metadatas = []
+
+    for page in pages:
+        page_chunks = splitter.split_text(page["text"])
+        for chunk in page_chunks:
+            chunks.append(chunk)
+            meta = {
+                "source": filename,
+                "page": page["page"],
+                "content_hash": content_hash
+            }
+            if user_id:
+                meta["user_id"] = user_id
+            metadatas.append(meta)
+
+    log(f"Number of chunks: {len(chunks)}")
+
+    if chunks:
+        collection.add(
+            documents=chunks,
+            ids=[f"{user_id}-{filename}-chunk-{i}" for i in range(len(chunks))],
+            metadatas=metadatas
+        )
+        log(f"Added {filename} to ChromaDB")
+
 def ingest_documents():
     pdf_files = glob.glob("documents/*.pdf")
 
     for pdf_file in pdf_files:
-        print(pdf_file)
         filename = os.path.basename(pdf_file)
-
-        print(f"Processing {filename}")
-        # Load the pdf
-        reader = PdfReader(pdf_file)
-
-        # extract text from pdf
-        pages = []
-        for page_number, page in enumerate(reader.pages, start=1):
-            page_text = page.extract_text() 
-            if page_text: 
-                pages.append({
-                    "page":page_number,
-                    "text":page_text
-                })
-
-        full_text = "\n".join(
-            page["text"]
-            for page in pages
-        )
-
-        content_hash = hash_content(full_text)
-
-        # Check whether this PDF has already been processed
-        existing = collection.get(
-            where={"source": filename}
-        )
-
-        if existing["ids"]:
-            existing_hash = existing["metadatas"][0].get("content_hash")
-            if existing_hash == content_hash:
-                print(f"Skipping {filename}- already processed")
-                continue
-            print(f"{filename} has changed - re-processing")
-            collection.delete(
-                where={"source": filename}
-            )
-
-        # Split the text into chunks
-        chunks = []
-        metadatas = []
-
-        for page in pages:
-            page_chunks = splitter.split_text(page["text"])
-            for chunk in page_chunks:
-                chunks.append(chunk)
-                metadatas.append({
-                    "source": filename,
-                    "page": page["page"],
-                    "content_hash": content_hash
-                })
-        print(f"Number of chunks: {len(chunks)}")
-
-        collection.add(
-            documents = chunks,
-            ids = [
-                f"{filename}-chunk-{i}" for i in range(len(chunks))
-            ],
-            metadatas=metadatas
-        )
-        print(f"Added {filename} to ChromaDB")
+        ingest_single_pdf(pdf_file, filename, status_cb=print)
 
 conversation_history = []
 
@@ -143,6 +160,59 @@ def rewrite_query_with_history(user_query, conversation_history):
         print(f"Query rewrite failed: {e}")
         return user_query
 
+def generate_rag_response(user_query, conversation_history, user_id=None):
+    """
+    Generates a RAG response for a user query given conversation history and optional user_id filter.
+    """
+    standalone_query = rewrite_query_with_history(user_query, conversation_history)
+    results = retrieve_documents(standalone_query, n_results=5, user_id=user_id)
+
+    retrieved_context = ""
+    if results and results.get("documents") and len(results["documents"]) > 0:
+        for document, metadata in zip(results["documents"][0], results["metadatas"][0]):
+            retrieved_context += (
+                f"Source: {metadata['source']}\n"
+                f"Page: {metadata['page']}\n"
+                f"Content: {document}\n\n"
+            )
+
+    history_text = "\n".join(
+        f"{message['role']}: {message['content']}"
+        for message in conversation_history
+    )
+
+    prompt = f"""You are a helpful assistant answering questions about the provided PDF documents.
+
+Answer the user's current question using ONLY the provided PDF context.
+
+For every factual claim, cite the specific source and page that supports it using this format:
+[Source: filename.pdf, Page: X]
+
+Only cite sources and page numbers that appear in the provided PDF context.
+Do not invent or guess page numbers.
+
+If multiple sources or pages support a claim, you may cite multiple sources.
+
+Previous conversation history:
+{history_text if history_text else "None"}
+
+Relevant PDF context:
+{retrieved_context}
+
+Current question:
+{user_query}
+
+If the answer cannot be found in the provided PDF context, say:
+"I don't know based on the provided document."
+
+Do not use outside knowledge or invent information.
+"""
+    response = client.models.generate_content(
+        model='gemini-2.5-flash',
+        contents=prompt
+    )
+    return response.text
+
 if __name__ == "__main__":
     ingest_documents()
     print("\n--- Ask anything about your pdf(type 'exit' to quit) ---\n")
@@ -151,75 +221,11 @@ if __name__ == "__main__":
         if user_query.lower() == "exit":
             break
 
-        standalone_query = rewrite_query_with_history(user_query, conversation_history)
-        
-        #if standalone_query != user_query:
-            #print(f"{standalone_query}")
-
-        results = retrieve_documents(
-            standalone_query,
-            n_results=5
-        )
-
-        retrieved_context = ""
-
-        for document, metadata in zip(
-            results["documents"][0],
-            results["metadatas"][0]
-        ):
-            retrieved_context += (
-                f"Source: {metadata['source']}\n"
-                f"Page: {metadata['page']}\n"
-                f"Content: {document}\n\n"
-            )
-
-        history_text = "\n".join(
-            f"{message['role']}: {message['content']}"
-            for message in conversation_history
-        )
-
-        prompt = f"""You are a helpful assistant answering questions about the provided PDF documents.
-
-        Answer the user's current question using ONLY the provided PDF context.
-
-        For every factual claim, cite the specific source and page that supports it using this format:
-        [Source: filename.pdf, Page: X]
-
-        Only cite sources and page numbers that appear in the provided PDF context.
-        Do not invent or guess page numbers.
-
-        If multiple sources or pages support a claim, you may cite multiple sources.
-
-        Previous conversation history:
-        {history_text if history_text else "None"}
-
-        Relevant PDF context:
-        {retrieved_context}
-
-        Current question:
-        {user_query}
-
-        If the answer cannot be found in the provided PDF context, say:
-        "I don't know based on the provided document."
-
-        Do not use outside knowledge or invent information.
-        """
         try:
-            response = client.models.generate_content(
-                model='gemini-2.5-flash',
-                contents=prompt
-            )
-            print(f"Assistant: {response.text}\n")
+            answer = generate_rag_response(user_query, conversation_history)
+            print(f"Assistant: {answer}\n")
+            conversation_history.append({"role": "user", "content": user_query})
+            conversation_history.append({"role": "assistant", "content": answer})
         except Exception as e:
             print(f"Error generating response: {e}")
             continue
-        
-        conversation_history.append({
-            "role": "user",
-            "content": user_query
-        })
-        
-        conversation_history.append({
-            "role": "assistant",
-            "content": response.text
-        })
