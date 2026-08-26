@@ -2,6 +2,13 @@ import os
 import streamlit as st
 # pyrefly: ignore [missing-import]
 from pypdf import PdfReader
+from login import login
+from supabase_client import supabase
+
+if "user" not in st.session_state:
+
+    login()
+    st.stop()
 
 from pdf_reader import (
     client, collection, splitter, hash_content,
@@ -17,7 +24,20 @@ if "messages" not in st.session_state:
 if "conversation_history" not in st.session_state:
     st.session_state.conversation_history = []
 
-# Sidebar: Document Management & Configuration
+user = st.session_state["user"]
+display_name = user.user_metadata.get(
+    "display_name",
+    user.email
+)
+
+st.sidebar.write(f"Hello **{display_name}**")
+if st.sidebar.button("Log Out"):
+    supabase.auth.sign_out()
+    del st.session_state["user"]
+    st.rerun()
+st.sidebar.divider()
+
+# Sidebar
 st.sidebar.header("Documents")
 
 uploaded_files = st.sidebar.file_uploader(
@@ -91,7 +111,7 @@ api_key = os.environ.get("GEMINI_API_KEY")
 api_key_missing = not api_key
 
 if api_key_missing:
-    st.warning("⚠️ `GEMINI_API_KEY` environment variable is missing. AI chat is disabled. Please set GEMINI_API_KEY in your environment or `.env` file.")
+    st.warning("`GEMINI_API_KEY` environment variable is missing. AI chat is disabled. Please set GEMINI_API_KEY in your environment or `.env` file.")
 
 # Check for Empty Collection Safeguard
 try:
@@ -100,7 +120,7 @@ except Exception:
     doc_count = 0
 
 if doc_count == 0:
-    st.info("📄 No documents indexed yet. Upload PDF files in the sidebar and click **Process & Index PDFs** to begin.")
+    st.info("No documents indexed yet. Upload PDF files in the sidebar and click **Process & Index PDFs** to begin.")
 
 # Render Chat Message Feed
 for message in st.session_state.messages:
