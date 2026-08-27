@@ -188,12 +188,12 @@ user_input = st.chat_input(
 )
 
 if user_input:
-    # 1. Render user message & append to session messages
+    # Render user message & append to session messages
     st.session_state.messages.append({"role": "user", "content": user_input})
     with st.chat_message("user"):
         st.markdown(user_input)
 
-    # 2. Generate RAG response via shared engine
+    # Generate RAG response via shared engine
     with st.chat_message("assistant"):
         try:
             response_text = generate_rag_response(
@@ -206,7 +206,7 @@ if user_input:
             response_text = f"Error generating response: {e}"
             st.error(response_text)
 
-    # 3. Append prompt and response to conversation history and messages
+    # Append prompt and response to conversation history and messages
     st.session_state.conversation_history.append({
         "role": "user",
         "content": user_input
