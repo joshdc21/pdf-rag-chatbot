@@ -9,6 +9,8 @@ from pypdf import PdfReader
 # pyrefly: ignore [missing-import]
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 import hashlib
+from supabase_client import supabase
+from embedding import embed_text
 
 load_dotenv()
 
@@ -23,6 +25,20 @@ def retrieve_documents(query, n_results=5, user_id=None):
         where=where_clause
     )
 
+#retrieve document from supabase
+def retrieve_documents_supabase(query, n_results=5):
+    embedding = embed_text(query)
+
+    response = supabase.rpc(
+        "match_documents",
+        {
+            "query_embedding": embedding,
+            "match_count": n_results
+        }
+    ).execute()
+
+    return response.data
+
 client = genai.Client(api_key=os.environ.get("GEMINI_API_KEY"))
 
 # Create a local Vector Database using ChromaDB
@@ -35,6 +51,72 @@ collection = chroma_client.get_or_create_collection(name="my_knowledge_base")
 splitter = RecursiveCharacterTextSplitter( 
     chunk_size=500, chunk_overlap=50 
 ) 
+
+def insert_chunk_to_supabase(file_source, filename, user_id=None, status_cb=None):
+    def log(msg):
+        if status_cb:
+            status_cb(msg)
+
+    log(f"Processing {filename}...")
+    reader = PdfReader(file_source)
+
+    pages = []
+    for page_number, page in enumerate(reader.pages, start=1):
+        page_text = page.extract_text()
+        if page_text:
+            pages.append({
+                "page": page_number,
+                "text": page_text
+            })
+
+    full_text = "\n".join(page["text"] for page in pages)
+    content_hash = hash_content(full_text)
+
+    # Check whether this PDF has already been processed
+    existing = (
+    supabase
+    .table("documents")
+    .select("id, content_hash")
+    .eq("user_id", user_id)
+    .eq("source", filename)
+    .execute()
+    )
+    
+    if existing.data:
+        existing_hash = existing.data[0]["content_hash"]
+
+        if existing_hash == content_hash:
+            log(f"Skipping {filename} - already processed")
+            return
+
+        log(f"{filename} has changed - re-processing")
+        supabase.table("documents").delete().eq("user_id", user_id).eq("source", filename).execute()
+
+    rows = []
+
+    for page in pages:
+        page_chunks = splitter.split_text(page["text"])
+        for chunk in page_chunks:
+            embedding = embed_text(chunk)
+            row = {
+                "user_id": user_id,
+                "content": chunk,
+                "embedding": embedding,
+                "source": filename,
+                "page": page["page"],
+                "content_hash": content_hash
+            }
+            rows.append(row)
+
+    if rows:
+        try:
+            supabase.table("documents").insert(rows).execute()
+            log(f"Added {filename} to Supabase")
+        except Exception as e:
+            log(f"Failed to insert rows: {e}")
+
+    log(f"Number of chunks: {len(rows)}")
+
 
 def ingest_single_pdf(file_source, filename, user_id=None, status_cb=None):
     """
@@ -161,19 +243,16 @@ def rewrite_query_with_history(user_query, conversation_history):
         return user_query
 
 def generate_rag_response(user_query, conversation_history, user_id=None):
-    """
-    Generates a RAG response for a user query given conversation history and optional user_id filter.
-    """
     standalone_query = rewrite_query_with_history(user_query, conversation_history)
-    results = retrieve_documents(standalone_query, n_results=5, user_id=user_id)
+    results = retrieve_documents_supabase(standalone_query, n_results=5)
 
     retrieved_context = ""
-    if results and results.get("documents") and len(results["documents"]) > 0:
-        for document, metadata in zip(results["documents"][0], results["metadatas"][0]):
+    if results:
+        for result in results:
             retrieved_context += (
-                f"Source: {metadata['source']}\n"
-                f"Page: {metadata['page']}\n"
-                f"Content: {document}\n\n"
+                f"Source: {result['source']}\n"
+                f"Page: {result['page']}\n"
+                f"Content: {result['content']}\n\n"
             )
 
     history_text = "\n".join(
