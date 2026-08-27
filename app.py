@@ -16,9 +16,16 @@ if "session" in st.session_state and st.session_state["session"]:
     except Exception:
         pass
 
-from pdf_reader import generate_rag_response, insert_chunk_to_supabase
+from pdf_reader import generate_rag_response, insert_chunk_to_supabase, delete_document, rename_document
 
 st.set_page_config(page_title="PDF Chatbot Assistant", layout="wide")
+st.markdown("""
+    <style>
+        [data-testid="stSidebarNav"] {
+            display: none;
+        }
+    </style>
+""", unsafe_allow_html=True)
 
 # Initialize session state for message display and conversation history
 if "messages" not in st.session_state:
@@ -56,7 +63,6 @@ uploaded_files = st.sidebar.file_uploader(
 )
 
 process_button = st.sidebar.button("Process PDF")
-
 if process_button:
     if not uploaded_files:
         st.sidebar.warning("Please select at least one PDF file before processing.")
@@ -118,8 +124,42 @@ except Exception:
 st.sidebar.divider()
 st.sidebar.subheader("Uploaded Documents")
 if user_docs:
-    for doc_name in sorted(user_docs):
-        st.sidebar.markdown(f"📄 `{doc_name}`")
+    for idx, doc_name in enumerate(sorted(user_docs)):
+        doc_col, menu_col = st.sidebar.columns([0.82, 0.18], vertical_alignment="center")
+        with doc_col:
+            st.markdown(f":material/picture_as_pdf: `{doc_name}`")
+        with menu_col:
+            with st.popover("⋮", help=f"Options for {doc_name}"):
+                
+                new_name = st.text_input(
+                    "New file name",
+                    value=doc_name,
+                    key=f"rename_input_{idx}"
+                )
+                if st.button("Rename", key=f"btn_rename_{idx}", use_container_width=True):
+                    success, message = rename_document(
+                        user_id=user.id,
+                        old_name=doc_name,
+                        new_name=new_name
+                    )
+                    if success:
+                        st.toast(f"Successfully renamed '{doc_name}' to '{new_name}'")
+                        st.rerun()
+                    else:
+                        st.toast(f"Error renaming '{doc_name}': {message}")
+                
+                st.divider()
+                
+                if st.button("Delete", key=f"btn_delete_{idx}", type="primary", use_container_width=True):
+                    success, message = delete_document(
+                        user_id=user.id,
+                        filename=doc_name
+                    )
+                    if success:
+                        st.toast(f"Successfully deleted '{doc_name}'")
+                        st.rerun()
+                    else:
+                        st.toast(f"Error deleting '{doc_name}': {message}")
 else:
     st.sidebar.caption("No documents uploaded yet.")
 

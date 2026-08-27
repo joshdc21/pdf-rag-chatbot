@@ -1,1 +1,0 @@
-Supabase is an open-source backend platform that provides authentication and databases
