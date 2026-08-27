@@ -16,7 +16,7 @@ if "session" in st.session_state and st.session_state["session"]:
     except Exception:
         pass
 
-from pdf_reader import ingest_single_pdf, generate_rag_response
+from pdf_reader import generate_rag_response, insert_chunk_to_supabase
 
 st.set_page_config(page_title="PDF Chatbot Assistant", layout="wide")
 
@@ -93,7 +93,7 @@ if process_button:
                     )
                     continue
 
-                ingest_single_pdf(
+                insert_chunk_to_supabase(
                     file_source=uploaded_file,
                     filename=filename,
                     user_id=user_id,
