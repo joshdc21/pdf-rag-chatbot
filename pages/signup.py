@@ -27,7 +27,7 @@ if st.button("Sign Up"):
             }
         })
         st.success("Account successfully created")
-        st.switch_page("login.py")
+        st.switch_page("app.py")
     except Exception as e:
         st.error(f"Error creating account: {e}")
         
