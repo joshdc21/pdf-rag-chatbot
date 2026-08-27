@@ -25,6 +25,67 @@ def retrieve_documents(query, n_results=5, user_id=None):
         where=where_clause
     )
 
+def delete_document(user_id, filename):
+    try:        
+        # Delete from documents
+        supabase.table("documents")\
+            .delete()\
+            .eq("user_id", user_id)\
+            .eq("source", filename)\
+            .execute()
+        # Delete from storage
+        supabase.storage \
+            .from_("pdfs") \
+            .remove([f"{user_id}/{filename}"])
+            
+        return True, f"Deleted '{filename}' successfully."
+    except Exception as e:
+        return False, f"Error deleting document: {str(e)}"
+
+def rename_document(user_id, old_name, new_name):
+    try:
+        new_name = new_name.strip()
+
+        if not new_name:
+            return False, "Filename can not be empty"
+        
+        if new_name == old_name:
+            return False, "New filename is the same as the current filename"
+
+        existing = (
+            supabase
+            .storage
+            .from_("pdfs")
+            .list(user_id)
+        )
+
+        existing_names = {
+            file_obj.get("name")
+            for file_obj in existing
+            if file_obj.get("name")
+        }
+
+        if new_name in existing_names:
+            return False, f"File name already exist"
+
+        # Rename from storage
+        supabase.storage \
+            .from_("pdfs") \
+            .move(
+                f"{user_id}/{old_name}",
+                f"{user_id}/{new_name}"
+            )
+        # Rename from documents
+        supabase.table("documents")\
+            .update({"source": new_name})\
+            .eq("user_id", user_id)\
+            .eq("source", old_name)\
+            .execute()
+        return True, f"Renamed '{old_name}' to '{new_name}'."
+
+    except Exception as e:
+        return False, f"Error renaming document: {str(e)}"
+
 #retrieve document from supabase
 def retrieve_documents_supabase(query, n_results=5):
     embedding = embed_text(query)
