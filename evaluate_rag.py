@@ -1,11 +1,35 @@
-from pdf_reader import retrieve_documents
+from pdf_reader import retrieve_documents_supabase
+from supabase_client import supabase
 
+
+# ============================================================
+# TEST USER LOGIN
+# ============================================================
+
+TEST_EMAIL = "email@example.com"
+TEST_PASSWORD = "emailpassword"
+
+auth_response = supabase.auth.sign_in_with_password({
+    "email": TEST_EMAIL,
+    "password": TEST_PASSWORD
+})
+
+if not auth_response.user:
+    raise RuntimeError("Supabase authentication failed")
+
+print(f"Authenticated as: {auth_response.user.email}")
+print(f"User ID: {auth_response.user.id}")
+
+
+# ============================================================
+# TEST QUESTIONS
+# ============================================================
 
 test_questions = [
     {
         "question": "How much total funding did AI-focused healthcare startups secure in Q1 2025, and what percentage of all digital health funding did this represent?",
         "expected_source": "AI_Healthcare_Sector_Market_Report.pdf",
-        "expected_page": 13
+        "expected_page": 11
     },
     {
         "question": "How does the report define the concept and scope of \"Artificial Intelligence (AI) in healthcare\"?",
@@ -20,12 +44,12 @@ test_questions = [
     {
         "question": "How are the concept of \"rapid healthcare data expansion\" and the concept of \"data privacy/bias risks\" dynamically related to the market's growth?",
         "expected_source": "AI_Healthcare_Sector_Market_Report.pdf",
-        "expected_page": 8
+        "expected_page": 10
     },
     {
         "question": "What specific statistical detail does the report provide to demonstrate the vulnerability of \"anonymized\" healthcare datasets to re-identification?",
         "expected_source": "AI_Healthcare_Sector_Market_Report.pdf",
-        "expected_page": 8
+        "expected_page": 10
     },
     {
         "question": "According to the \"Introduction to UI/UX Design\" article, what is its exact publication date, and what is the specific university affiliation of its author, Nasrullah Hamidli?",
@@ -65,7 +89,7 @@ test_questions = [
     {
         "question": "How do the concepts of Pancasila as an \"organic, hierarchical unity\" and the status of its individual \"principles\" relate to each other?",
         "expected_source": "Pancasila.pdf",
-        "expected_page": 1
+        "expected_page": 5
     },
     {
         "question": "How does the article define Sastrapradetdja’s concept of \"ideology\" when viewed in a narrow sense?",
@@ -80,43 +104,57 @@ test_questions = [
 ]
 
 
+# ============================================================
+# EVALUATION
+# ============================================================
+
 def evaluate_hit_at_3():
     hits = 0
 
-    for test in test_questions:
-        results = retrieve_documents(
+    for i, test in enumerate(test_questions, start=1):
+
+        print(f"\n{'=' * 70}")
+        print(f"Question {i}/{len(test_questions)}")
+        print(test["question"])
+
+        results = retrieve_documents_supabase(
             test["question"],
-            n_results=3
+            n_results=1
         )
 
-        retrieved_metadata = results["metadatas"][0]
-
         hit = any(
-            metadata["source"] == test["expected_source"]
-            and metadata["page"] == test["expected_page"]
-            for metadata in retrieved_metadata
+            result.get("source") == test["expected_source"]
+            and result.get("page") == test["expected_page"]
+            for result in results
         )
 
         if hit:
             hits += 1
-            print(f"PASS: {test['question']}")
+            print("PASS")
+
         else:
-            print(f"\nFAIL: {test['question']}")
+            print("FAIL")
             print(
                 f"Expected: {test['expected_source']}, "
                 f"Page {test['expected_page']}"
             )
 
-            print("Retrieved:")
-            for i, metadata in enumerate(retrieved_metadata, start=1):
-                print(
-                    f"  {i}. {metadata['source']}, "
-                    f"Page {metadata['page']}"
-                )
+            if not results:
+                print("Retrieved: NOTHING")
+            else:
+                print("Retrieved:")
+                for rank, result in enumerate(results, start=1):
+                    print(
+                        f"  {rank}. "
+                        f"{result.get('source')}, "
+                        f"Page {result.get('page')}, "
+                        f"Similarity: {result.get('similarity')}"
+                    )
 
     score = hits / len(test_questions)
 
-    print(f"\nHit@3: {score:.2%}")
+    print(f"\n{'=' * 70}")
+    print(f"Hit@3: {hits}/{len(test_questions)} = {score:.2%}")
 
 
 if __name__ == "__main__":

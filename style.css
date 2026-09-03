@@ -1,0 +1,185 @@
+/* 1. Static Sidebar: Hide collapse/expand controls */
+[data-testid="stSidebarNav"],
+[data-testid="stSidebarCollapseButton"],
+[data-testid="stSidebarExpandButton"],
+[data-testid="collapsedControl"],
+button[kind="header-close"],
+[data-testid="baseButton-headerNoPadding"] {
+    display: none !important;
+}
+
+/* 2. Balanced Sidebar Layout & Vertical Gaps */
+[data-testid="stSidebar"] {
+    padding-top: 0 !important;
+}
+
+[data-testid="stSidebarUserContent"] {
+    padding: 1.25rem 1rem 1.25rem 1rem !important;
+}
+
+/* 10–14px gap between unrelated elements within the same section */
+[data-testid="stSidebar"] [data-testid="stVerticalBlock"],
+[data-testid="stSidebarUserContent"] [data-testid="stVerticalBlock"] {
+    gap: 12px !important;
+}
+
+[data-testid="stSidebar"] .stElementContainer {
+    margin-bottom: 0px !important;
+}
+
+/* 3. 16–20px above/below section dividers */
+[data-testid="stSidebar"] hr,
+[data-testid="stSidebar"] [data-testid="stDivider"] {
+    margin-top: 18px !important;
+    margin-bottom: 18px !important;
+    padding: 0 !important;
+}
+
+/* 4. 6–10px between a heading and the label/element directly below it */
+[data-testid="stSidebar"] h1,
+[data-testid="stSidebar"] h2,
+[data-testid="stSidebar"] h3 {
+    margin-top: 8px !important;
+    margin-bottom: 8px !important;
+    padding-top: 0 !important;
+    padding-bottom: 0 !important;
+}
+
+/* 5. File Uploader Widget Spacing */
+[data-testid="stSidebar"] [data-testid="stFileUploader"] {
+    margin-top: 2px !important;
+    margin-bottom: 10px !important;
+}
+
+[data-testid="stSidebar"] [data-testid="stFileUploader"] label,
+[data-testid="stSidebar"] [data-testid="stWidgetLabel"] {
+    margin-bottom: 6px !important;
+    padding-bottom: 0px !important;
+}
+
+[data-testid="stSidebar"] [data-testid="stFileUploaderDropzone"] {
+    padding: 0.6rem 0.6rem !important;
+    min-height: 0 !important;
+}
+
+/* 6. 6–8px gap between each document row in the uploaded list */
+[data-testid="stSidebar"] [data-testid="stHorizontalBlock"] {
+    gap: 6px !important;
+    align-items: center !important;
+    margin-bottom: 7px !important;
+}
+
+[data-testid="stSidebar"] [data-testid="stPopover"] {
+    margin: 0 !important;
+}
+
+[data-testid="stSidebar"] [data-testid="stPopover"] button {
+    padding: 2px 6px !important;
+    min-height: 0 !important;
+    height: auto !important;
+    line-height: 1 !important;
+}
+
+/* 7. Plain text link styling for sidebar logout button */
+[data-testid="stSidebar"] button[kind="tertiary"] {
+    padding: 0 !important;
+    margin: 4px 0 0 0 !important;
+    height: auto !important;
+    min-height: 0 !important;
+    border: none !important;
+    background: transparent !important;
+    color: #888888 !important;
+    font-size: 0.82rem !important;
+    font-weight: 400 !important;
+    box-shadow: none !important;
+    text-decoration: underline !important;
+}
+
+[data-testid="stSidebar"] button[kind="tertiary"]:hover {
+    color: var(--text-color, #FAFAFA) !important;
+    background: transparent !important;
+    text-decoration: underline !important;
+}
+
+/* 8. Main Container & Components Styling */
+.block-container {
+    padding-top: 1.5rem;
+    padding-bottom: 2rem;
+}
+
+/* Account Info Block */
+.sidebar-account {
+    margin-bottom: 4px;
+}
+
+.account-label {
+    font-size: 0.75rem;
+    color: #888888;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.account-email {
+    font-size: 0.88rem;
+    font-weight: 500;
+    color: inherit;
+    word-break: break-all;
+    margin-top: 2px;
+}
+
+/* Top Header Bar */
+.top-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding-bottom: 12px;
+    margin-bottom: 16px;
+    border-bottom: 1px solid rgba(255,255,255,0.1);
+}
+
+.top-header-left {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.top-header-title {
+    font-size: 1.25rem;
+    font-weight: 700;
+}
+
+.top-header-subtitle {
+    font-size: 0.82rem;
+    color: #888888;
+}
+
+/* Empty Chat State */
+.empty-chat-container {
+    text-align: center !important;
+    display: flex !important;
+    flex-direction: column !important;
+    align-items: center !important;
+    justify-content: center !important;
+    padding: 35px 20px 20px 20px;
+}
+
+.empty-chat-icon {
+    font-size: 2.5rem;
+    margin-bottom: 10px;
+    text-align: center !important;
+}
+
+.empty-chat-heading {
+    font-size: 1.4rem;
+    font-weight: 600;
+    margin-bottom: 8px;
+    text-align: center !important;
+}
+
+.empty-chat-subtext {
+    color: #888888;
+    max-width: 520px;
+    margin: 0 auto 24px auto;
+    font-size: 0.95rem;
+    text-align: center !important;
+}
