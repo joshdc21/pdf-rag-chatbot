@@ -1,6 +1,7 @@
 from dotenv import load_dotenv 
 import os 
 import glob
+import re
 from google import genai 
 # pyrefly: ignore [missing-import]
 import chromadb
@@ -303,6 +304,32 @@ def rewrite_query_with_history(user_query, conversation_history):
         print(f"Query rewrite failed: {e}")
         return user_query
 
+def add_clickable_citations(response_text, user_id=None):
+    pattern = r'\[(?:Source:\s*)?([^,\]]+\.pdf)(?:,\s*|\s*-\s*)Page:?\s*(\d+)\]'
+    url_cache = {}
+
+    def replace_citation(match):
+        filename = match.group(1).strip()
+        page_num = match.group(2).strip()
+        cache_key = (filename, page_num)
+
+        if cache_key not in url_cache:
+            file_path = f"{user_id}/{filename}" if user_id else filename
+            try:
+                res = supabase.storage.from_("pdfs").create_signed_url(file_path, 3600)
+                if isinstance(res, dict):
+                    url = res.get("signedUrl") or res.get("signedURL") or str(res)
+                else:
+                    url = getattr(res, "signed_url", str(res))
+            except Exception:
+                url = supabase.storage.from_("pdfs").get_public_url(file_path)
+            
+            url_cache[cache_key] = f"{url}#page={page_num}"
+
+        return f"[{filename} - Page {page_num}]({url_cache[cache_key]})"
+
+    return re.sub(pattern, replace_citation, response_text)
+
 def generate_rag_response(user_query, conversation_history, user_id=None):
     standalone_query = rewrite_query_with_history(user_query, conversation_history)
     results = retrieve_documents_supabase(standalone_query, n_results=5)
@@ -325,13 +352,10 @@ def generate_rag_response(user_query, conversation_history, user_id=None):
 
 Answer the user's current question using ONLY the provided PDF context.
 
-For every factual claim, cite the specific source and page that supports it using this format:
-[Source: filename.pdf, Page: X]
+Cite the relevant source and page number using the format [filename.pdf - Page: X] naturally at the end of key statements or paragraphs. Avoid repeating the same citation after every single sentence when consecutive sentences come from the same source.
 
 Only cite sources and page numbers that appear in the provided PDF context.
 Do not invent or guess page numbers.
-
-If multiple sources or pages support a claim, you may cite multiple sources.
 
 Previous conversation history:
 {history_text if history_text else "None"}
@@ -347,11 +371,16 @@ If the answer cannot be found in the provided PDF context, say:
 
 Do not use outside knowledge or invent information.
 """
-    response = client.models.generate_content(
-        model='gemini-2.5-flash',
-        contents=prompt
-    )
-    return response.text
+    try:
+        response = client.models.generate_content(
+            model='gemini-2.5-flash',
+            contents=prompt
+        )
+        return add_clickable_citations(response.text, user_id=user_id)
+    except Exception as e:
+        if "429" in str(e) or "RESOURCE_EXHAUSTED" in str(e):
+            return "Rate limit reached for Gemini API. Please try again in a bit."
+        raise e
 
 if __name__ == "__main__":
     ingest_documents()
