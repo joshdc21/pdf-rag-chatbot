@@ -14,7 +14,6 @@ def login():
 
     email = st.text_input("Email")
     password = st.text_input("Password", type="password")
-    st.markdown("[Forgot Password](forgot_password)")
 
     if st.button("Login"):
 
