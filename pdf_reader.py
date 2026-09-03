@@ -114,14 +114,11 @@ splitter = RecursiveCharacterTextSplitter(
     chunk_size=500, chunk_overlap=50 
 ) 
 
-def insert_chunk_to_supabase(file_source, filename, user_id=None, status_cb=None):
-    def log(msg):
-        if status_cb:
-            status_cb(msg)
-
-    log(f"Processing {filename}...")
+def extract_pdf_pages_and_hash(file_source):
+    """
+    Extracts text page-by-page from a PDF and returns page list and SHA256 content hash.
+    """
     reader = PdfReader(file_source)
-
     pages = []
     for page_number, page in enumerate(reader.pages, start=1):
         page_text = page.extract_text()
@@ -130,18 +127,26 @@ def insert_chunk_to_supabase(file_source, filename, user_id=None, status_cb=None
                 "page": page_number,
                 "text": page_text
             })
-
     full_text = "\n".join(page["text"] for page in pages)
     content_hash = hash_content(full_text)
+    return pages, content_hash
+
+def insert_chunk_to_supabase(file_source, filename, user_id=None, status_cb=None):
+    def log(msg):
+        if status_cb:
+            status_cb(msg)
+
+    log(f"Processing {filename}...")
+    pages, content_hash = extract_pdf_pages_and_hash(file_source)
 
     # Check whether this PDF has already been processed
     existing = (
-    supabase
-    .table("documents")
-    .select("id, content_hash")
-    .eq("user_id", user_id)
-    .eq("source", filename)
-    .execute()
+        supabase
+        .table("documents")
+        .select("id, content_hash")
+        .eq("user_id", user_id)
+        .eq("source", filename)
+        .execute()
     )
     
     if existing.data:
@@ -189,29 +194,11 @@ def ingest_single_pdf(file_source, filename, user_id=None, status_cb=None):
             status_cb(msg)
 
     log(f"Processing {filename}...")
-    reader = PdfReader(file_source)
-
-    pages = []
-    for page_number, page in enumerate(reader.pages, start=1):
-        page_text = page.extract_text()
-        if page_text:
-            pages.append({
-                "page": page_number,
-                "text": page_text
-            })
-
-    full_text = "\n".join(page["text"] for page in pages)
-    content_hash = hash_content(full_text)
+    pages, content_hash = extract_pdf_pages_and_hash(file_source)
 
     # Check whether this PDF has already been processed
-    existing = collection.get(
-    where={
-        "$and": [
-            {"source": filename},
-            {"user_id": user_id}
-        ]
-    }
-)
+    where_cond = {"$and": [{"source": filename}, {"user_id": user_id}]} if user_id else {"source": filename}
+    existing = collection.get(where=where_cond)
 
     if existing and existing.get("ids"):
         existing_hash = existing["metadatas"][0].get("content_hash")
@@ -219,14 +206,7 @@ def ingest_single_pdf(file_source, filename, user_id=None, status_cb=None):
             log(f"Skipping {filename} - already processed")
             return
         log(f"{filename} has changed - re-processing")
-        collection.delete(
-    where={
-        "$and": [
-            {"source": filename},
-            {"user_id": user_id}
-        ]
-    }
-)
+        collection.delete(where=where_cond)
 
     # Split the text into chunks
     chunks = []

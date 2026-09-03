@@ -25,20 +25,17 @@ def load_css(file_path):
 st.set_page_config(page_title="PDF Chatbot Assistant", layout="wide", initial_sidebar_state="expanded")
 load_css("style.css")
 
-# Initialize session state for message display, history, and doc status
+# Initialize session state for message display and history
 if "messages" not in st.session_state:
     st.session_state.messages = []
 
 if "conversation_history" not in st.session_state:
     st.session_state.conversation_history = []
 
-if "doc_status" not in st.session_state:
-    st.session_state.doc_status = {}
-
 user = st.session_state["user"]
 user_email = user.email
 
-# 2. Account section: "Signed in as", plain text email, "Log out" link
+# Account section: "Signed in as", plain text email, "Log out" link
 with st.sidebar:
     st.markdown(f"""
         <div class="sidebar-account">
@@ -68,7 +65,6 @@ uploaded_files = st.sidebar.file_uploader(
     key=f"pdf_uploader_{st.session_state.uploader_key}"
 )
 
-# Process PDF as Primary Button
 process_button = st.sidebar.button("Process PDF", type="primary", use_container_width=True)
 
 if process_button:
@@ -76,13 +72,9 @@ if process_button:
         st.sidebar.warning("Please select at least one PDF file before processing.")
     else:
         with st.sidebar.spinner("Processing & indexing PDFs..."):
-            status_container = st.sidebar.container()
             for uploaded_file in uploaded_files:
                 filename = uploaded_file.name
                 user_id = user.id
-
-                # Per-document status: Set Amber (Processing) while active
-                st.session_state.doc_status[filename] = "Processing"
 
                 file_bytes = uploaded_file.getvalue()
                 file_path = f"{user_id}/{filename}"
@@ -93,33 +85,17 @@ if process_button:
                         file_bytes,
                         {"content-type": "application/pdf"}
                     )
-                    status_container.text(f"{filename} uploaded successfully")
                 except Exception:
                     pass
-
-                def make_status_cb(file_name):
-                    def cb(msg):
-                        status_container.text(msg)
-                        if "Failed" in msg or "Error" in msg or "failed" in msg:
-                            st.session_state.doc_status[file_name] = "Failed"
-                        elif "Added" in msg or "Skipping" in msg or "already processed" in msg:
-                            st.session_state.doc_status[file_name] = "Ready"
-                    return cb
 
                 try:
                     insert_chunk_to_supabase(
                         file_source=uploaded_file,
                         filename=filename,
-                        user_id=user_id,
-                        status_cb=make_status_cb(filename)
+                        user_id=user_id
                     )
-                    # If no failure was recorded during insertion, mark Ready (Green)
-                    if st.session_state.doc_status.get(filename) != "Failed":
-                        st.session_state.doc_status[filename] = "Ready"
                 except Exception as e:
-                    # Per-document status: Set Red (Failed) if exception occurs
-                    st.session_state.doc_status[filename] = "Failed"
-                    status_container.error(f"Failed to process {filename}: {e}")
+                    st.sidebar.error(f"Failed to process {filename}: {e}")
 
             st.session_state.uploader_key += 1
             st.rerun()
@@ -139,23 +115,18 @@ except Exception:
 st.sidebar.divider()
 st.sidebar.subheader("Uploaded Documents")
 
-# Render uploaded documents with status dots and clean filename display
+# Render uploaded documents with Material PDF icon and clean filename display
 if user_docs:
     for idx, doc_name in enumerate(sorted(user_docs)):
-        # Default status for existing storage documents is Ready unless in session state
-        status = st.session_state.doc_status.get(doc_name, "Ready")
-        status_dot = "🟢" if status == "Ready" else ("🟡" if status == "Processing" else "🔴")
-
-        # Truncate long filenames with ellipsis and show tooltip on hover
+        # Truncate long filenames with ellipsis and show full name on hover
         max_name_len = 22
         display_name_text = doc_name if len(doc_name) <= max_name_len else doc_name[:19] + "..."
 
         doc_col, menu_col = st.sidebar.columns([0.82, 0.18], vertical_alignment="center")
         with doc_col:
             st.markdown(
-                f"<span title='{doc_name} • Status: {status}'>{status_dot} 📄 {display_name_text}</span>",
-                unsafe_allow_html=True,
-                help=f"{doc_name} • Status: {status}"
+                f":material/picture_as_pdf: {display_name_text}",
+                help=doc_name
             )
         with menu_col:
             with st.popover("⋮", help=f"Options for {doc_name}"):
@@ -171,8 +142,6 @@ if user_docs:
                         new_name=new_name
                     )
                     if success:
-                        if doc_name in st.session_state.doc_status:
-                            st.session_state.doc_status[new_name] = st.session_state.doc_status.pop(doc_name)
                         st.toast(f"Successfully renamed '{doc_name}' to '{new_name}'")
                         st.rerun()
                     else:
@@ -186,7 +155,6 @@ if user_docs:
                         filename=doc_name
                     )
                     if success:
-                        st.session_state.doc_status.pop(doc_name, None)
                         st.toast(f"Successfully deleted '{doc_name}'")
                         st.rerun()
                     else:
@@ -230,11 +198,11 @@ if not st.session_state.messages:
 
     chip_col1, chip_col2, chip_col3 = st.columns([1, 1, 1], gap="small")
     with chip_col1:
-        if st.button("📄 Summarize this document", use_container_width=True, key="chip_summarize"):
-            prompt_from_chip = "Summarize the main points of the document."
+        if st.button("📄 Summarize my documents", use_container_width=True, key="chip_summarize"):
+            prompt_from_chip = "Summarize the main points of all the documents."
     with chip_col2:
-        if st.button("📊 Key statistics & findings", use_container_width=True, key="chip_stats"):
-            prompt_from_chip = "What are the key statistics and findings in the document?"
+        if st.button("🧭 Main topics covered", use_container_width=True, key="chip_topics"):
+            prompt_from_chip = "What are the main topics covered across the uploaded documents?"
     with chip_col3:
         if st.button("💡 Explain core concepts", use_container_width=True, key="chip_concepts"):
             prompt_from_chip = "Explain the core concepts covered in the uploaded documents."
