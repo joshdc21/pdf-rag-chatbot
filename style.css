@@ -35,12 +35,17 @@ button[kind="header-close"],
     padding: 0 !important;
 }
 
-/* 4. 6–10px between a heading and the label/element directly below it */
 [data-testid="stSidebar"] h1,
-[data-testid="stSidebar"] h2,
-[data-testid="stSidebar"] h3 {
+[data-testid="stSidebar"] h2 {
     margin-top: 8px !important;
     margin-bottom: 8px !important;
+    padding-top: 0 !important;
+    padding-bottom: 0 !important;
+}
+
+[data-testid="stSidebar"] h3 {
+    margin-top: 8px !important;
+    margin-bottom: 14px !important;
     padding-top: 0 !important;
     padding-bottom: 0 !important;
 }
