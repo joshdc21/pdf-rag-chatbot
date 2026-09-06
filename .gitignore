@@ -10,4 +10,3 @@ __pycache__/
 *.pyc
 chroma_db/
 .streamlit/
-app.png
