@@ -198,13 +198,13 @@ if not st.session_state.messages:
 
     chip_col1, chip_col2, chip_col3 = st.columns([1, 1, 1], gap="small")
     with chip_col1:
-        if st.button("📄 Summarize my documents", use_container_width=True, key="chip_summarize"):
+        if st.button("Summarize my documents", use_container_width=True, key="chip_summarize"):
             prompt_from_chip = "Summarize the main points of all the documents."
     with chip_col2:
-        if st.button("🧭 Main topics covered", use_container_width=True, key="chip_topics"):
+        if st.button("Main topics covered", use_container_width=True, key="chip_topics"):
             prompt_from_chip = "What are the main topics covered across the uploaded documents?"
     with chip_col3:
-        if st.button("💡 Explain core concepts", use_container_width=True, key="chip_concepts"):
+        if st.button("Explain core concepts", use_container_width=True, key="chip_concepts"):
             prompt_from_chip = "Explain the core concepts covered in the uploaded documents."
 
 # Render Chat Message Feed when messages exist
