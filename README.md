@@ -4,6 +4,8 @@ A web-based conversational Retrieval-Augmented Generation (RAG) assistant built 
 
 The application allows authenticated users to upload, manage (rename/delete), and search through PDF documents with multi-turn conversational AI context, automatic query rewriting, and interactive page-level citations.
 
+![Application Preview](app.png)
+
 ---
 
 ## Features
